@@ -9,157 +9,187 @@ import (
 	"strings"
 )
 
-func getCode(src string, node ast.Node) string {
-	if node == nil || !node.Pos().IsValid() || !node.End().IsValid() {
-		return ""
-	}
-	end := int(node.End()) - 1
-	if end > len(src) {
-		end = len(src)
-	}
-	return src[node.Pos()-1 : end]
-}
-
 var ErrContainerFuncNotFound = errors.New("parser error: templ container function not found")
 var ErrExpectedNodeNotFound = errors.New("parser error: expected node not found")
 
-var prefixRegexps = []*regexp.Regexp{
-	regexp.MustCompile(`^if`),
-	regexp.MustCompile(`^for`),
-	regexp.MustCompile(`^switch`),
-	regexp.MustCompile(`^(case|default)`),
-}
-var prefixExtractors = []Extractor{
-	IfExtractor{},
-	ForExtractor{},
-	SwitchExtractor{},
-	CaseExtractor{},
+var elseRegex = regexp.MustCompile(`^(else )(\s*){`)
+
+func Else(content string) (start, end, length int, err error) {
+	groups := elseRegex.FindStringSubmatch(content)
+	if len(groups) == 0 {
+		return 0, 0, 0, ErrExpectedNodeNotFound
+	}
+	return len("else "), len("else ") + len(groups[2]), len(groups[0]), nil
 }
 
-var elseRegex = regexp.MustCompile(`^else\s+{`)
-var elseIfRegex = regexp.MustCompile(`^(else\s+)if`)
+var elseIfRegex = regexp.MustCompile(`^(else\s+)if\s+`)
 
-func ParseExpression(content string) (expr string, err error) {
-	if match := elseRegex.FindString(content); match != "" {
-		return match, nil
+func ElseIf(content string) (start, end, length int, err error) {
+	groups := elseIfRegex.FindStringSubmatch(content)
+	if len(groups) == 0 {
+		return 0, 0, 0, ErrExpectedNodeNotFound
 	}
-
-	if groups := elseIfRegex.FindStringSubmatch(content); len(groups) > 1 {
-		expr, err = parseExp(strings.TrimPrefix(content, groups[1]), IfExtractor{})
-		if err != nil {
-			return expr, err
-		}
-		return groups[1] + expr, nil
-	}
-
-	if strings.HasPrefix(content, "case") || strings.HasPrefix(content, "default") {
-		expr = "switch {\n" + content + "\n}"
-		expr, err = parseExp(expr, CaseExtractor{})
-		if err != nil {
-			return expr, err
-		}
-		return expr, nil
-	}
-
-	for i, re := range prefixRegexps {
-		if re.MatchString(content) {
-			expr, err = parseExp(content, prefixExtractors[i])
-			if err != nil {
-				return expr, err
-			}
-			return expr, nil
-		}
-	}
-
-	expr, err = parseExp(content, ExprExtractor{})
+	elsePrefix := groups[1]
+	start, end, length, err = extract(content[len(elsePrefix):], IfExtractor{})
 	if err != nil {
-		return expr, err
+		return 0, 0, 0, err
+	}
+	// Since we trimmed the `else ` prefix, we need to add it back on.
+	start += len(elsePrefix)
+	end += len(elsePrefix)
+	return start, end, length, nil
+}
+
+func Case(content string) (start, end, length int, err error) {
+	if !(strings.HasPrefix(content, "case") || strings.HasPrefix(content, "default")) {
+		return 0, 0, 0, ErrExpectedNodeNotFound
+	}
+	prefix := "switch {\n"
+	start, end, length, err = extract(prefix+content+"\n}", CaseExtractor{})
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	// Since we added a `switch {` prefix, we need to remove it.
+	start -= len(prefix)
+	end -= len(prefix)
+	return start, end, length, nil
+}
+
+func If(content string) (start, end, length int, err error) {
+	if !strings.HasPrefix(content, "if") {
+		return 0, 0, 0, ErrExpectedNodeNotFound
+	}
+	return extract(content, IfExtractor{})
+}
+
+func For(content string) (start, end, length int, err error) {
+	if !strings.HasPrefix(content, "for") {
+		return 0, 0, 0, ErrExpectedNodeNotFound
+	}
+	return extract(content, ForExtractor{})
+}
+
+func Switch(content string) (start, end, length int, err error) {
+	if !strings.HasPrefix(content, "switch") {
+		return 0, 0, 0, ErrExpectedNodeNotFound
+	}
+	return extract(content, SwitchExtractor{})
+}
+
+func Expression(content string) (start, end, length int, err error) {
+	start, end, length, err = extract(content, ExprExtractor{})
+	if err != nil {
+		return 0, 0, 0, err
 	}
 	// If the expression ends with `...` then it's a child spread expression.
-	if suffix := content[len(expr):]; strings.HasPrefix(suffix, "...") {
-		expr += suffix[:3]
+	if suffix := content[end:]; strings.HasPrefix(suffix, "...") {
+		end += len("...")
+		length += len("...")
 	}
-	return expr, nil
+	return start, end, length, nil
 }
 
 type IfExtractor struct{}
 
-func (e IfExtractor) Code(src string, body []ast.Stmt) (expr string, err error) {
+var InGoIfExpression = false
+
+func (e IfExtractor) Code(src string, body []ast.Stmt) (start, end, length int, err error) {
 	stmt, ok := body[0].(*ast.IfStmt)
 	if !ok {
-		return expr, ErrExpectedNodeNotFound
+		return 0, 0, 0, ErrExpectedNodeNotFound
 	}
-	expr = getCode(src, stmt)[:int(stmt.Body.Lbrace)-int(stmt.If)+1]
-	return expr, nil
+	start = int(stmt.If) + len("if")
+	end = int(stmt.Body.Lbrace) - 1
+	length = int(stmt.Body.Lbrace) - start
+	return start, end, length, nil
 }
 
 type ForExtractor struct{}
 
-func (e ForExtractor) Code(src string, body []ast.Stmt) (expr string, err error) {
+func (e ForExtractor) Code(src string, body []ast.Stmt) (start, end, length int, err error) {
 	stmt := body[0]
 	switch stmt := stmt.(type) {
 	case *ast.ForStmt:
-		// Only get the code up until the first `{`.
-		expr = getCode(src, stmt)[:int(stmt.Body.Lbrace)-int(stmt.For)+1]
-		return expr, nil
+		start = int(stmt.For) + len("for")
+		end = int(stmt.Body.Lbrace) - 1
+		length = int(stmt.Body.Lbrace)
+		return start, end, length, nil
 	case *ast.RangeStmt:
-		// Only get the code up until the first `{`.
-		expr = getCode(src, stmt)[:int(stmt.Body.Lbrace)-int(stmt.For)+1]
-		return expr, nil
+		start = int(stmt.For) + len("for")
+		end = int(stmt.Body.Lbrace) - 1
+		length = int(stmt.Body.Lbrace)
+		return start, end, length, nil
 	}
-	return expr, ErrExpectedNodeNotFound
+	return 0, 0, 0, ErrExpectedNodeNotFound
 }
 
 type SwitchExtractor struct{}
 
-func (e SwitchExtractor) Code(src string, body []ast.Stmt) (expr string, err error) {
+func (e SwitchExtractor) Code(src string, body []ast.Stmt) (start, end, length int, err error) {
 	stmt := body[0]
 	switch stmt := stmt.(type) {
 	case *ast.SwitchStmt:
-		// Only get the code up until the first `{`.
-		expr = getCode(src, stmt)[:int(stmt.Body.Lbrace)-int(stmt.Switch)+1]
-		return expr, nil
+		start = int(stmt.Switch) + len("switch")
+		end = int(stmt.Body.Lbrace) - 1
+		length = int(stmt.Body.Lbrace)
+		return start, end, length, nil
 	case *ast.TypeSwitchStmt:
-		// Only get the code up until the first `{`.
-		expr = getCode(src, stmt)[:int(stmt.Body.Lbrace)-int(stmt.Switch)+1]
-		return expr, nil
+		start = int(stmt.Switch) + len("switch")
+		end = int(stmt.Body.Lbrace) - 1
+		length = int(stmt.Body.Lbrace)
+		return start, end, length, nil
 	}
-	return expr, ErrExpectedNodeNotFound
+	return 0, 0, 0, ErrExpectedNodeNotFound
 }
 
 type CaseExtractor struct{}
 
-func (e CaseExtractor) Code(src string, body []ast.Stmt) (expr string, err error) {
+func (e CaseExtractor) Code(src string, body []ast.Stmt) (start, end, length int, err error) {
 	sw, ok := body[0].(*ast.SwitchStmt)
 	if !ok {
-		return expr, ErrExpectedNodeNotFound
+		return 0, 0, 0, ErrExpectedNodeNotFound
 	}
 	stmt, ok := sw.Body.List[0].(*ast.CaseClause)
 	if !ok {
-		return expr, ErrExpectedNodeNotFound
+		return 0, 0, 0, ErrExpectedNodeNotFound
 	}
-	start := int(stmt.Pos() - 1)
-	end := stmt.Colon
-	return src[start:end], nil
+	if stmt.List == nil {
+		// Default case.
+		start = int(stmt.Case) + len("default")
+		end = int(stmt.Colon)
+		length = int(stmt.Colon) - start
+		return start, end, length, nil
+	}
+	// Standard case.
+	start = int(stmt.Case) + len("case")
+	end = int(stmt.Colon) - 1
+	length = int(stmt.Colon) - start
+	return start, end, length, nil
 }
 
 type ExprExtractor struct{}
 
-func (e ExprExtractor) Code(src string, body []ast.Stmt) (expr string, err error) {
+func (e ExprExtractor) Code(src string, body []ast.Stmt) (start, end, length int, err error) {
 	stmt, ok := body[0].(*ast.ExprStmt)
 	if !ok {
-		return expr, ErrExpectedNodeNotFound
+		return 0, 0, 0, ErrExpectedNodeNotFound
 	}
-	expr = getCode(src, stmt)
-	return expr, nil
+	start = int(stmt.Pos()) - 1
+	end = int(stmt.End()) - 1
+	length = end - start
+	return start, end, length, nil
 }
 
+// Extract a Go expression from the content.
+// The Go expression starts at "start" and ends at "end".
+// The reader should skip until "length" to pass over the expression and into the next
+// logical block.
 type Extractor interface {
-	Code(src string, body []ast.Stmt) (expr string, err error)
+	Code(src string, body []ast.Stmt) (start, end, length int, err error)
 }
 
-// ParseFunc returns the Go code up to the opening brace of the function body.
-func ParseFunc(content string) (expr string, err error) {
+// Func returns the Go code up to the opening brace of the function body.
+func Func(content string) (expr string, err error) {
 	prefix := "package main\n"
 	src := prefix + content
 
@@ -181,13 +211,13 @@ func ParseFunc(content string) (expr string, err error) {
 	return expr, err
 }
 
-func parseExp(content string, extractor Extractor) (expr string, err error) {
+func extract(content string, extractor Extractor) (start, end, length int, err error) {
 	prefix := "package main\nfunc templ_container() {\n"
 	src := prefix + content
 
 	node, parseErr := parser.ParseFile(token.NewFileSet(), "", src, parser.AllErrors)
 	if node == nil {
-		return expr, parseErr
+		return 0, 0, 0, parseErr
 	}
 
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -203,12 +233,10 @@ func parseExp(content string, extractor Extractor) (expr string, err error) {
 		if fn.Body.List == nil || len(fn.Body.List) == 0 {
 			return false
 		}
-		expr, err = extractor.Code(src, fn.Body.List)
+		start, end, length, err = extractor.Code(src, fn.Body.List)
+		start -= len(prefix)
+		end -= len(prefix)
 		return false
 	})
-	if err != nil {
-		return expr, err
-	}
-
-	return expr, err
+	return start, end, length, err
 }

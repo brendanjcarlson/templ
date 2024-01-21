@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/a-h/parse"
+	"github.com/a-h/templ/parser/v2/goexpression"
 )
 
 var stringExpression = parse.Func(func(pi *parse.Input) (n Node, ok bool, err error) {
@@ -12,7 +13,7 @@ var stringExpression = parse.Func(func(pi *parse.Input) (n Node, ok bool, err er
 
 	// Once we have a prefix, we must have an expression that returns a string.
 	var r StringExpression
-	if r.Expression, err = parseGoExpression("string expression", pi); err != nil {
+	if r.Expression, err = parseGo("string expression", pi, goexpression.Expression); err != nil {
 		return r, false, err
 	}
 

@@ -5,195 +5,230 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestIf(t *testing.T) {
+	prefix := "if "
 	suffixes := []string{
-		"\n<div>\nif true content\n\t</div>}",
+		"{\n<div>\nif true content\n\t</div>}",
 	}
 	tests := []testInput{
 		{
 			name:  "basic if",
-			input: `if true {`,
+			input: `true `,
 		},
 		{
 			name:  "if function call",
-			input: `if pkg.Func() {`,
+			input: `pkg.Func() `,
 		},
 		{
 			name:  "compound",
-			input: "if x := val(); x > 3 {",
+			input: "x := val(); x > 3 ",
 		},
 		{
 			name:  "if multiple",
-			input: `if x && y && (!z) {`,
+			input: `x && y && (!z) `,
 		},
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, If))
 		}
 	}
 }
 
 func TestElse(t *testing.T) {
+	prefix := "else "
 	suffixes := []string{
-		"\n<div>\nelse content\n\t</div>}",
+		"{\n<div>\nelse content\n\t</div>}",
 	}
 	tests := []testInput{
 		{
 			name:  "else",
-			input: `else {`,
+			input: ``,
 		},
 		{
 			name:  "else with spacing",
-			input: `else    {`,
-		},
-		{
-			name:  "boolean",
-			input: `else if true {`,
-		},
-		{
-			name:  "boolean with spacing",
-			input: `else   if   true {`,
-		},
-		{
-			name:  "func",
-			input: `else if pkg.Func() {`,
-		},
-		{
-			name:  "expression",
-			input: "else if x > 3 {",
-		},
-		{
-			name:  "multiple",
-			input: `else if x && y && (!z) {`,
+			input: `    `,
 		},
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, Else))
+		}
+	}
+}
+
+func TestElseIf(t *testing.T) {
+	prefix := "else if "
+	suffixes := []string{
+		"{\n<div>\nelse content\n\t</div>}",
+	}
+	tests := []testInput{
+		{
+			name:  "boolean",
+			input: `true `,
+		},
+		{
+			name:  "boolean with spacing",
+			input: `   true `,
+		},
+		{
+			name:  "func",
+			input: `pkg.Func() `,
+		},
+		{
+			name:  "expression",
+			input: "x > 3 ",
+		},
+		{
+			name:  "multiple",
+			input: `x && y && (!z) `,
+		},
+	}
+	for _, test := range tests {
+		for i, suffix := range suffixes {
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, ElseIf))
 		}
 	}
 }
 
 func TestFor(t *testing.T) {
+	prefix := "for "
 	suffixes := []string{
-		"\n<div>\nloop content\n\t</div>}",
+		"{\n<div>\nloop content\n\t</div>}",
 	}
 	tests := []testInput{
 		{
 			name:  "three component",
-			input: `for i := 0; i < 100; i++ {`,
+			input: `i := 0; i < 100; i++ `,
 		},
 		{
 			name:  "three component, empty",
-			input: `for ; ; i++ {`,
+			input: `; ; i++ `,
 		},
 		{
 			name:  "while",
-			input: `for n < 5 {`,
+			input: `n < 5 `,
 		},
 		{
 			name:  "infinite",
-			input: `for {`,
+			input: ``,
 		},
 		{
 			name:  "range with index",
-			input: `for k, v := range m {`,
+			input: `k, v := range m `,
 		},
 		{
 			name:  "range with key only",
-			input: `for k := range m {`,
+			input: `k := range m `,
 		},
 		{
 			name:  "channel receive",
-			input: `for x := range channel {`,
+			input: `x := range channel `,
 		},
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, For))
 		}
 	}
 }
 
 func TestSwitch(t *testing.T) {
+	prefix := "switch "
 	suffixes := []string{
-		"\ncase 1:\n\t<div>\n\tcase 2:\n\t\t<div>\n\tdefault:\n\t\t<div>\n\t</div>}",
-		"\ndefault:\n\t<div>\n\t</div>}",
-		"\n}",
+		"{\ncase 1:\n\t<div>\n\tcase 2:\n\t\t<div>\n\tdefault:\n\t\t<div>\n\t</div>}",
+		"{\ndefault:\n\t<div>\n\t</div>}",
+		"{\n}",
 	}
 	tests := []testInput{
 		{
 			name:  "switch",
-			input: `switch {`,
+			input: ``,
 		},
 		{
 			name:  "switch with expression",
-			input: `switch x {`,
+			input: `x `,
 		},
 		{
 			name:  "switch with function call",
-			input: `switch pkg.Func() {`,
+			input: `pkg.Func() `,
 		},
 		{
 			name:  "type switch",
-			input: `switch x := x.(type) {`,
+			input: `x := x.(type) `,
 		},
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, Switch))
 		}
 	}
 }
 
 func TestCase(t *testing.T) {
+	prefix := "case "
 	suffixes := []string{
-		"\n<div>\ncase 1 content\n\t</div>\n\tcase 3:",
-		"\ndefault:\n\t<div>\n\t</div>}",
-		"\n}",
+		":\n<div>\ncase 1 content\n\t</div>\n\tcase 3:",
+		":\ndefault:\n\t<div>\n\t</div>}",
+		":\n}",
 	}
 	tests := []testInput{
 		{
 			name:  "case",
-			input: `case 1:`,
+			input: `1`,
 		},
 		{
 			name:  "case with expression",
-			input: `case x > 3:`,
+			input: `x > 3`,
 		},
 		{
 			name:  "case with function call",
-			input: `case pkg.Func():`,
+			input: `pkg.Func()`,
 		},
 		{
 			name:  "case with multiple expressions",
-			input: `case x > 3, x < 4:`,
+			input: `x > 3, x < 4`,
 		},
 		{
 			name:  "case with multiple expressions and default",
-			input: `case x > 3, x < 4, x == 5:`,
+			input: `x > 3, x < 4, x == 5`,
 		},
 		{
 			name:  "case with type switch",
-			input: `case bool:`,
-		},
-		{
-			name:  "default",
-			input: "default:",
+			input: `bool`,
 		},
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, Case))
+		}
+	}
+}
+
+func TestCaseDefault(t *testing.T) {
+	prefix := "default"
+	suffixes := []string{
+		":\n<div>\ncase 1 content\n\t</div>\n\tcase 3:",
+		":\ndefault:\n\t<div>\n\t</div>}",
+		":\n}",
+	}
+	tests := []testInput{
+		{
+			name:  "default",
+			input: ``,
+		},
+	}
+	for _, test := range tests {
+		for i, suffix := range suffixes {
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, Case))
 		}
 	}
 }
 
 func TestExpression(t *testing.T) {
+	prefix := ""
 	suffixes := []string{
 		"}",
 	}
@@ -224,12 +259,13 @@ func TestExpression(t *testing.T) {
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, Expression))
 		}
 	}
 }
 
 func TestChildren(t *testing.T) {
+	prefix := ""
 	suffixes := []string{
 		" }",
 		" } <div>Other content</div>",
@@ -263,7 +299,7 @@ func TestChildren(t *testing.T) {
 	}
 	for _, test := range tests {
 		for i, suffix := range suffixes {
-			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, suffix))
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), run(test, prefix, suffix, Expression))
 		}
 	}
 }
@@ -274,9 +310,12 @@ type testInput struct {
 	expectedErr error
 }
 
-func run(test testInput, suffix string) func(t *testing.T) {
+type extractor func(content string) (start, end, length int, err error)
+
+func run(test testInput, prefix, suffix string, e extractor) func(t *testing.T) {
 	return func(t *testing.T) {
-		actual, err := ParseExpression(test.input + suffix)
+		src := prefix + test.input + suffix
+		start, end, _, err := e(src)
 		if test.expectedErr == nil && err != nil {
 			t.Fatalf("expected nil error, got %v, %T", err, err)
 		}
@@ -286,7 +325,8 @@ func run(test testInput, suffix string) func(t *testing.T) {
 		if test.expectedErr != nil && err != nil && test.expectedErr.Error() != err.Error() {
 			t.Fatalf("expected err %q, got %q", test.expectedErr.Error(), err.Error())
 		}
-		if diff := cmp.Diff(test.input, actual, cmpopts.EquateErrors()); diff != "" {
+		actual := src[start:end]
+		if diff := cmp.Diff(test.input, actual); diff != "" {
 			t.Error(diff)
 		}
 	}

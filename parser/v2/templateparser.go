@@ -16,11 +16,9 @@ type templateExpression struct {
 	Expression Expression
 }
 
-var templateExpressionStartParser = parse.String("templ ")
-
 var templateExpressionParser = parse.Func(func(pi *parse.Input) (r templateExpression, ok bool, err error) {
 	// Check the prefix first.
-	if _, ok, err = templateExpressionStartParser.Parse(pi); err != nil || !ok {
+	if !inputHasPrefix(pi, "templ ") {
 		return
 	}
 

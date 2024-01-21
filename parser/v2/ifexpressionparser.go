@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/a-h/parse"
+	"github.com/a-h/templ/parser/v2/goexpression"
 )
 
 var ifExpression ifExpressionParser
@@ -17,7 +18,7 @@ func (ifExpressionParser) Parse(pi *parse.Input) (n Node, ok bool, err error) {
 	}
 
 	var r IfExpression
-	if r.Expression, err = parseGoExpression("if", pi); err != nil {
+	if r.Expression, err = parseGo("if", pi, goexpression.If); err != nil {
 		return r, false, err
 	}
 
@@ -72,7 +73,7 @@ func (elseIfExpressionParser) Parse(pi *parse.Input) (r ElseIfExpression, ok boo
 	}
 
 	// Once we have the `else if` prefix, we must have a Go expression to parse.
-	if r.Expression, err = parseGoExpression("else if", pi); err != nil {
+	if r.Expression, err = parseGo("else if", pi, goexpression.ElseIf); err != nil {
 		return r, false, err
 	}
 

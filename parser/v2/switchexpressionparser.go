@@ -1,9 +1,8 @@
 package parser
 
 import (
-	"strings"
-
 	"github.com/a-h/parse"
+	"github.com/a-h/templ/parser/v2/goexpression"
 )
 
 var switchExpression parse.Parser[Node] = switchExpressionParser{}
@@ -12,13 +11,13 @@ type switchExpressionParser struct{}
 
 func (_ switchExpressionParser) Parse(pi *parse.Input) (n Node, ok bool, err error) {
 	// Check the prefix first.
-	if _, ok, err = parse.String("switch ").Parse(pi); err != nil || !ok {
+	if !inputHasPrefix(pi, "switch ") {
 		return
 	}
 
 	// Once we have a prefix, we must have a Go expression.
 	var r SwitchExpression
-	if r.Expression, err = parseGoExpression("switch", pi); err != nil {
+	if r.Expression, err = parseGo("switch", pi, goexpression.Switch); err != nil {
 		return r, false, err
 	}
 
@@ -55,14 +54,12 @@ var caseExpressionStartParser = parse.Func(func(pi *parse.Input) (e Expression, 
 	}
 
 	// Look for a case or default statement.
-	s, _ := pi.Peek(9)
-	ok = (strings.HasPrefix(s, "case") || strings.HasPrefix(s, "default"))
-	if !ok {
+	if !inputHasPrefix(pi, "case", "default") {
 		pi.Seek(start)
 		return
 	}
 
-	if e, err = parseGoExpression("case expression", pi); err != nil {
+	if e, err = parseGo("case expression", pi, goexpression.Case); err != nil {
 		return e, false, err
 	}
 

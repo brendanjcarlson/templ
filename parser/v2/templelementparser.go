@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/a-h/parse"
+	"github.com/a-h/templ/parser/v2/goexpression"
 )
 
 type templElementExpressionParser struct{}
@@ -14,7 +15,7 @@ func (p templElementExpressionParser) Parse(pi *parse.Input) (n Node, ok bool, e
 
 	// Parse the identifier.
 	var r TemplElementExpression
-	if r.Expression, err = parseGoExpression("templ element", pi); err != nil {
+	if r.Expression, err = parseGo("templ element", pi, goexpression.Expression); err != nil {
 		return r, false, err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/a-h/parse"
+	"github.com/a-h/templ/parser/v2/goexpression"
 )
 
 // Element.
@@ -214,12 +215,12 @@ var boolExpressionAttributeParser = parse.Func(func(pi *parse.Input) (r BoolExpr
 		return
 	}
 
-	// Once we have a prefix, we must have an expression that returns a template.
-	if r.Expression, err = parseGoExpression("boolean expression", pi); err != nil {
+	// Once we have a prefix, we must have an expression that returns a boolean.
+	if r.Expression, err = parseGo("boolean expression", pi, goexpression.Expression); err != nil {
 		return r, false, err
 	}
 
-	// Eat the Final brace.
+	// Eat the final brace.
 	if _, ok, err = closeBraceWithOptionalPadding.Parse(pi); err != nil || !ok {
 		err = parse.Error("boolean expression: missing closing brace", pi.Position())
 		pi.Seek(start)
@@ -250,7 +251,7 @@ var expressionAttributeParser = parse.Func(func(pi *parse.Input) (attr Expressio
 	}
 
 	// Expression.
-	if attr.Expression, err = parseGoExpression("attribute if", pi); err != nil {
+	if attr.Expression, err = parseGo("attribute if", pi, goexpression.Expression); err != nil {
 		return attr, false, err
 	}
 
@@ -279,7 +280,7 @@ var spreadAttributesParser = parse.Func(func(pi *parse.Input) (attr SpreadAttrib
 	}
 
 	// Expression.
-	if attr.Expression, err = parseGoExpression("attribute spread", pi); err != nil {
+	if attr.Expression, err = parseGo("attribute spread", pi, goexpression.Expression); err != nil {
 		return attr, false, err
 	}
 

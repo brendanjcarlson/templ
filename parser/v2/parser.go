@@ -45,3 +45,16 @@ var template = parse.Func(func(pi *parse.Input) (r HTMLTemplate, ok bool, err er
 
 	return r, true, nil
 })
+
+func inputHasPrefix(input *parse.Input, prefixes ...string) bool {
+	for _, prefix := range prefixes {
+		ip, ok := input.Peek(len(prefix))
+		if !ok {
+			continue
+		}
+		if ip == prefix {
+			return true
+		}
+	}
+	return false
+}
